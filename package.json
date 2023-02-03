@@ -1,0 +1,30 @@
+{
+  "name": "backend-starter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "akp111",
+  "license": "ISC",
+  "dependencies": {
+    "@solana/pay": "^0.2.4",
+    "@solana/web3.js": "^1.73.0",
+    "bignumber.js": "^9.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "ejs": "^3.1.8",
+    "express": "^4.18.2",
+    "expressjs": "^1.0.1",
+    "mongoose": "^6.5.0",
+    "node-schedule": "^2.1.1",
+    "nodemon": "^2.0.19"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
+}
