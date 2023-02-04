@@ -27,7 +27,6 @@ const writeToFile = (key, data, filename) => {
     fs.writeFileSync(`${__dirname}/${filename}`, JSON.stringify(JsonData));
   } catch (error) {
     console.log(error);
-    throw error;
   }
 };
 
@@ -37,36 +36,41 @@ const writeToFile = (key, data, filename) => {
 // the amount of SOL that needs to be transferred
 // the time interval (in days) the payment should be done
 exports.Register = async (req, res, next) => {
-  // extract data from the body
-  const user = req.body.user;
-  const recipient = req.body.recipient;
-  const amount = req.body.amount;
-  const time = req.body.time;
+  try {
+    // extract data from the body
+    const user = req.body.user;
+    const recipient = req.body.recipient;
+    const amount = req.body.amount;
+    const time = req.body.time;
 
-  // get data from file
-  const storedData = readData("data.json");
-  // if user already exists
-  if (storedData && storedData[user]) {
-    let userDetails = storedData[user];
-    userDetails.recipient.push(recipient);
-    userDetails.amount.push(amount);
-    userDetails.time.push(time);
-    console.log(userDetails);
-    // store it in the file
-    writeToFile(user, userDetails, "data.json");
-    // start the cron task to make a encodedurl
-    this.startCron(user, recipient, amount, time);
-    return res.send("New recipient added");
-  } else {
-    // create a new user if user already exists
-    const newUserObject = {
-      recipient: [recipient],
-      amount: [amount],
-      time: [time],
-    };
-    writeToFile(user, newUserObject, "data.json");
-    this.startCron(user, recipient, amount, time);
-    return res.send("Hooray!! You are all set");
+    // get data from file
+    const storedData = readData("data.json");
+    // if user already exists
+    if (storedData && storedData[user]) {
+      let userDetails = storedData[user];
+      userDetails.recipient.push(recipient);
+      userDetails.amount.push(amount);
+      userDetails.time.push(time);
+      console.log(userDetails);
+      // store it in the file
+      writeToFile(user, userDetails, "data.json");
+      // start the cron task to make a encodedurl
+      this.startCron(user, recipient, amount, time);
+      return res.send("New recipient added");
+    } else {
+      // create a new user if user already exists
+      const newUserObject = {
+        recipient: [recipient],
+        amount: [amount],
+        time: [time],
+      };
+      writeToFile(user, newUserObject, "data.json");
+      this.startCron(user, recipient, amount, time);
+      return res.send("Hooray!! You are all set");
+    }
+  } catch (error) {
+    console.log("error %o", error);
+    return res.status(500);
   }
 };
 
@@ -82,7 +86,7 @@ exports.startCron = async (user, recipientAddress, solAmount, time) => {
     const message = "Your timely donation time";
     const memo = `SOLFLOW#`;
     // start the cron task based on time
-    const job = schedule.scheduleJob(`*/1 * * * *`, async function () {
+    const job = schedule.scheduleJob(`*/5 * * * *`, async function () {
       let data = readData("pending.json");
       let reference = new solanaWeb3.Keypair().publicKey;
       console.log(data);
@@ -99,9 +103,9 @@ exports.startCron = async (user, recipientAddress, solAmount, time) => {
         memo,
       });
       console.log(encodedUrl);
-      data[user].push({ encodedUrl, reference });
+      const taskName = startCronToCheckTransaction(user, reference, recipient, amount);
+      data[user].push({ encodedUrl, reference, taskName, recipient, amount });
       writeToFile(user, data[user], "pending.json");
-      startCronToCheckTransaction(user, reference, recipient, amount);
     });
     // this will create the current payment link
     let data = readData("pending.json");
@@ -118,10 +122,17 @@ exports.startCron = async (user, recipientAddress, solAmount, time) => {
       message,
       memo,
     });
+    const taskName = await startCronToCheckTransaction(
+      user,
+      reference,
+      recipient,
+      amount
+    );
+    console.log("task name");
+    console.log(taskName);
     let newData = data[user];
-    newData.push({ encodedUrl, reference });
+    newData.push({ encodedUrl, reference, taskName, recipient, amount });
     writeToFile(user, newData, "pending.json");
-    startCronToCheckTransaction(user, reference, recipient, amount);
   } catch (error) {
     console.log(error);
   }
@@ -134,42 +145,73 @@ const startCronToCheckTransaction = async (
   recipient,
   amount
 ) => {
-  const job = schedule.scheduleJob(`*/1 * * * *`, async function () {
-    const connection = new solanaWeb3.Connection(
-      "https://api.devnet.solana.com"
-    );
-    console.count("Checking for transaction...");
+  const job = schedule.scheduleJob(`*/1 * * * *`, async function (cronData) {
     try {
-      signatureInfo = await findReference(connection, reference, {
-        finality: "confirmed",
-      });
-      console.log("\n 🖌  Signature found: ", signatureInfo.signature);
-      if (signatureInfo.signature) {
-        try {
-          await solpay.validateTransfer(connection, signatureInfo.signature, {
-            recipient,
-            amount,
-          });
-          let data = readData("pending.json");
-          data = data.filter(function (obj) {
-            return obj.reference !== reference;
-          });
-          writeToFile(user, data, "pending.json");
-        } catch (error) {
-          console.log("trx failed");
+      const connection = new solanaWeb3.Connection(
+        "https://api.devnet.solana.com"
+      );
+      let data = readData("pending.json");
+      let userData = data[user];
+      console.count("Checking for transaction...");
+      try {
+        console.log(
+          "Trying to get transaction info for reference: %s",
+          reference
+        );
+        signatureInfo = await solpay.findReference(connection, reference, {
+          finality: "confirmed",
+        });
+        console.log(signatureInfo);
+        console.log("\n 🖌  Signature found: ", signatureInfo.signature);
+        if (signatureInfo.signature) {
+          try {
+            // await solpay.validateTransfer(connection, signatureInfo.signature, {
+            //   recipient,
+            //   amount,
+            // });
+            let data = readData("pending.json");
+            let userData = data[user];
+            let toBeDletedCron = userData.filter(function (obj) {
+              return obj.reference == reference;
+            });
+            console.log("to be deleted");
+            console.log(toBeDletedCron[0]);
+            let newUserData = userData.filter(function (obj) {
+              return obj.reference != reference;
+            });
+            console.log("updated data");
+            console.log(newUserData);
+            let current_job =
+              schedule.scheduledJobs[toBeDletedCron[0].taskName];
+            console.log(current_job);
+            current_job.cancel();
+            writeToFile(user, newUserData, "pending.json");
+          } catch (error) {
+            console.log(error);
+          }
         }
+      } catch (error) {
+        console.log("error: %o", error);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log("error: %o", error);
+    }
   });
+  return job.name;
 };
 
 // function return the pending payment for a specific wallet address
 exports.getPendingPayments = async (req, res, next) => {
-  console.log("calling pending data");
-  let data = readData("pending.json");
-  if (data && data[req.body.user]) {
-    return res.json({ res: data[req.body.user] });
-  } else {
-    return res.json({ res: null });
+  try {
+    console.log("calling pending data");
+    let data = readData("pending.json");
+    if (data && data[req.body.user]) {
+      return res.json({ res: data[req.body.user] });
+    } else {
+      return res.json({ res: null });
+    }
+  } catch (error) {
+    console.log("error: %o", error);
+    return res.status(500);
   }
 };
