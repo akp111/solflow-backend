@@ -11,6 +11,9 @@
   "keywords": [],
   "author": "akp111",
   "license": "ISC",
+  "engines": {
+    "node": "16.5.0"
+  },
   "dependencies": {
     "@solana/pay": "^0.2.4",
     "@solana/web3.js": "^1.73.0",
