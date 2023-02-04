@@ -151,7 +151,6 @@ const startCronToCheckTransaction = async (
         "https://api.devnet.solana.com"
       );
       let data = readData("pending.json");
-      let userData = data[user];
       console.count("Checking for transaction...");
       try {
         console.log(
@@ -165,10 +164,10 @@ const startCronToCheckTransaction = async (
         console.log("\n 🖌  Signature found: ", signatureInfo.signature);
         if (signatureInfo.signature) {
           try {
-            // await solpay.validateTransfer(connection, signatureInfo.signature, {
-            //   recipient,
-            //   amount,
-            // });
+            await solpay.validateTransfer(connection, signatureInfo.signature, {
+              recipient,
+              amount,
+            });
             let data = readData("pending.json");
             let userData = data[user];
             let toBeDletedCron = userData.filter(function (obj) {
