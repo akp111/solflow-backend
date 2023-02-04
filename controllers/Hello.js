@@ -86,7 +86,7 @@ exports.startCron = async (user, recipientAddress, solAmount, time) => {
     const message = "Your timely donation time";
     const memo = `SOLFLOW#`;
     // start the cron task based on time
-    const job = schedule.scheduleJob(`*/5 * * * *`, async function () {
+    const job = schedule.scheduleJob(`* * */${time} * *`, async function () {
       let data = readData("pending.json");
       let reference = new solanaWeb3.Keypair().publicKey;
       console.log(data);
